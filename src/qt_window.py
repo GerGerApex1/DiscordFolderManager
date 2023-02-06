@@ -17,7 +17,6 @@ class ServerIcon(QtWidgets.QWidget):
         self.boxlayout.addWidget(self.iconLabel, 1)
         self.boxlayout.addWidget(self.serverLabel, 0)
         self.setLayout(self.boxlayout)
-        self.data = 1
     def set_data(self, data):
         self.data = data
     def mouseMoveEvent(self, e):
@@ -125,79 +124,62 @@ class DragWidget(QWidget):
             # Get the widget at each index in turn.
             w = self.blayout.itemAt(n).widget()
             data.append(w.data)
+
         return data
-class ServerContainer(QWidget):
-    orderChanged = pyqtSignal(list)
-    def __init__(self, *args, **kwargs):
-        super().__init__()
-        self.setAcceptDrops(True)
-        self.boxlayout = QVBoxLayout()
-        self.setLayout(self.boxlayout)
-    def dragEnterEvent(self, e):
-        e.accept()
-    def dropEvent(self, e):
-        pos = e.pos()
-        widget = e.source()
-        for n in range(self.boxlayout.count()):
-            w = self.boxlayout.itemAt(n).widget()
-            drop_here = pos.y() < w.y() + w.size().height() // 2
-            if drop_here:
-                self.boxlayout.insertWidget(n-1, widget)
-                self.orderChanged.emit(self.get_item_data())
-                break
+class CurserScrollableArea(QScrollArea):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setWidgetResizable(False)
+        self.setGeometry(10, 0, 461, 881)
+    def mouseMoveEvent(self, event):
+        y = event.y()
+        height = self.height()
+        border = 80  # adjust the border value as needed
 
-        e.accept()
-    def add_item(self, item):
-        self.boxlayout.addWidget(item)
+        if y < border:
+            self.verticalScrollBar().setValue(
+                self.verticalScrollBar().value() - border + y
+            )
+        elif y > height - border:
+            self.verticalScrollBar().setValue(
+                self.verticalScrollBar().value() + y - height + border
+            )
 
-    def get_item_data(self):
-        data = []
-        for n in range(self.blayout.count()):
-            # Get the widget at each index in turn.
-            w = self.blayout.itemAt(n).widget()
-            data.append(w.data)
-        return data
-
+        super().mouseMoveEvent(event)
 class ClassWindow(QtWidgets.QMainWindow):
     def __init__(self, *args, **kwargs):
         super(ClassWindow, self).__init__(*args, **kwargs)
         uic.loadUi('src/resources/ui/mainwindow.ui', self)
         self.setWindowFlags(Qt.WindowCloseButtonHint | Qt.WindowMinimizeButtonHint | Qt.MSWindowsFixedSizeDialogHint)
-        self.scroll = self.scrollArea          
-        self.widget = self.scrollAreaWidgetContents      
-        #self.gridBox = QtWidgets.QGridLayout(self.widget)
-        #self.widget.setLayout(self.gridBox)
-        self.scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        self.scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.scrollArea1 = CurserScrollableArea(self)
+        self.scroll = self.scrollArea1          
         #self.scroll.setWidget(self.widget)
         self.setWindowTitle("Discord Server Manager")
         self.verticalLayout1 = DragWidget()
-        self.verticalLayout1.orderChanged.connect(print)
         layout = QVBoxLayout()
         layout.addStretch(1)
         layout.addWidget(self.verticalLayout1)
         layout.addStretch(1)
-        self.widget.setLayout(layout)
+        self.scroll.setLayout(layout)
         self.confirmButton.clicked.connect(self._confirmButtonEvent)
-        #self.setCentralWidget(QWidget().setLayout(QVBoxLayout().addWidget(self.verticalLayout1)))
         self.count = 0        
         self.dataOrder = {"before": [], "after": []}
     def _confirmButtonEvent(self):
-        print('true')
         self.dataOrder['after'] = self.verticalLayout1.get_item_data()
+        print(f"get_item_data: {self.verticalLayout1.get_item_data()}")
         self.event(self.dataOrder['before'], self.dataOrder['after'])
-        self.dataOrder['before'] = self.verticalLayout1.get_item_data()
+        self.dataOrder['before'] = self.dataOrder['after']
     def setConfirmButtonEvent(self, event):
-        print('sucess')
         self.event = event
-    def addServer(self, imagePath, serverName, index):
-        print(imagePath)
+    def addServer(self, imagePath, serverName, widgetData):
         dragItem = ServerIcon(imagePath, serverName)
-        dragItem.set_data(index)
+        dragItem.set_data(widgetData)
         self.verticalLayout1.add_item(dragItem)
         self.count += 1
     def show(self) -> None:
-        self.dataOrder['before'] = list(range(0, self.verticalLayout1.blayout.count()))
+        self.dataOrder['before'] =  self.verticalLayout1.get_item_data()
         return super().show()
 class LoginWindow(QtWidgets.QMainWindow):
     def __init__(self, *args, **kwargs):
@@ -205,13 +187,16 @@ class LoginWindow(QtWidgets.QMainWindow):
         uic.loadUi('src/resources/ui/login.ui', self)
         self.login_button = self.login
         self.is_not_logged = True
-        self.setWindowTitle('tes')
+        self.setWindowTitle('Discord Server Manager Login Page')
         self.mainWindow = ClassWindow()
     def saved_token(self, token):
         self.discordTokenLineEdit.setText(token)
     def login_event(self):
         self.accept()
         window.close()
+    def getToken(self):
+        print('LoginWindow.getToken() has been executed')
+        return self.discordTokenLineEdit.text()
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     mw = ClassWindow()

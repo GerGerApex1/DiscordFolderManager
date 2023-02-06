@@ -1,7 +1,6 @@
 from typing import Any, Callable, Iterable, Mapping
 from PyQt5 import QtWidgets, QtGui
 import qt_window
-import common_func
 import sys
 import tempfile
 import os
@@ -10,6 +9,7 @@ import atexit
 import src.discord_guild_info
 from functools import partial
 import multiprocessing
+import aiohttp
 def getAllIcons(auth):
     folder_path = tempfile.mkdtemp(prefix="DiscordServerManager-")
     serverRawList = src.discord_guild_info.getDiscordList(auth)
@@ -33,7 +33,7 @@ def getAllIcons(auth):
 def exit_event(path):
     print("Detected Program Exit.")
     shutil.rmtree(path)
-def downloadIconImage(url, folder_path):
+def downloadIconImage(url, folder_path): 
     resp = src.discord_guild_info.downloadImage(url)
     parts = url.split('/')
     # get the second-to-last element    

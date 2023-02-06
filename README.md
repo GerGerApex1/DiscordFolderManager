@@ -14,7 +14,7 @@ py main.py
     
 ## Roadmap
 
-- [ ] Faster API Calls
+- [x] Faster API Calls
 - [ ] Optimize Image Download
 - [ ] Code clean-up
 - [ ] Manage Server Folders 

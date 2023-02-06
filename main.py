@@ -12,7 +12,7 @@ import atexit
 import shutil
 import os
 import tempfile
-
+import asyncio
 import qt_window
 from PyQt5 import QtWidgets, QtGui
 from PyQt5 import QtWidgets
@@ -24,70 +24,50 @@ def main():
     loginwindow = qt_window.LoginWindow()
     currentOrder = {}
     def rearrangeServer(old, after):
-        # after: [0, 2, 1, 3, 4, 5, 6, 7, 8]
-        # before [1, 0, 2, 3, 4, 5, 6, 7, 8]
-        # server_list: {0: WebElement}
-        updatedOrder = currentOrder.copy()
-        print(old, after)
-        for i in range(len(after)):
-            if old[i] != after[i]:
-                print(old[i], after[i])
-                newItem1 = currentOrder[after[i]]
-                oldItem1 = currentOrder[old[i]]
-                # old to new updatedOrder 
-                print(oldItem1, newItem1)
-                updatedOrder[old[i]] = newItem1
-                # new to old 
-                updatedOrder[after[i]] = oldItem1
-        print(f"""
-                        CURRENT ORDER
-        {currentOrder}
-                        NEW ORDER
-        {updatedOrder} 
-        """)
-        discord_guild_info.rearrangeServers(loginwindow.discordTokenLineEdit.text(), list(updatedOrder.values()))
+        updatedOrder = [i['orig_data'] for i in after]
+        discord_guild_info .rearrangeServers(loginwindow.getToken(), updatedOrder)
+        folders = discord_guild_info.getDiscordGuildFolders(loginwindow.getToken())
+        currentOrder.update(getOrderList(folders, loginwindow.getToken()))  
+        #currentOrder.update(updatedOrder)
     def login_event():
-        folders = discord_guild_info.getDiscordGuildFolders(loginwindow.discordTokenLineEdit.text())
+        folders = discord_guild_info.getDiscordGuildFolders(loginwindow.getToken())
         if "message" in folders:
             print('Something gone wrong. ' +  folders['message'])
         else:
             main_window = loginwindow.mainWindow
             t = common.CustomThread(target=download_folder, args=(
-            loginwindow.discordTokenLineEdit.text(), folders))
+            loginwindow.getToken(), folders))
             main_window.setConfirmButtonEvent(rearrangeServer)
             t.start()
             list = t.join()
             print(list)
             nonlocal currentOrder
-            currentOrder = getOrderList(folders, loginwindow.discordTokenLineEdit.text())
+            currentOrder = getOrderList(folders, loginwindow.getToken())
             addImageToGui(main_window, list)    # type: ignore
             main_window.show()
+            loginwindow.close()
     loginwindow.login_button.clicked.connect(login_event)
     if credentials_manager.is_available():
         loginwindow.saved_token(credentials_manager.get_token())
     loginwindow.show()
-    app.exec_() 
+    sys.exit(app.exec_()) 
 def getOrderList(folders, authToken):
     data = {}
-    data1 = discord_guild_info.getGuildFolders(folders, authToken)
+    data1 = asyncio.run(discord_guild_info.getGuildFolders(folders, authToken))
     for i in data1:
-        print(str(i['index']))
-        data[i['index']] = folders["guild_folders"][i['index']]
-    print(data)
+        data[str(i['index'])] = folders["guild_folders"][i['index']]
     return data
 def addImageToGui(window: qt_window.ClassWindow, serverList: list):
     for x in serverList:
-        print('added image')
-        print(x['filename'])
-        print(x)
-        window.addServer(x["filename"], x["serverName"], x["index"])
+        widgetData = { "index": x['index'], "orig_data": x["serverInfo"]}
+        print(f"Added Image Filepath: {x['filename']}")
+        window.addServer(x["filename"], x["serverName"], widgetData=widgetData)
 
 
 
 def download_folder(auth,userGuildFolderSettings ):
     folder_path = tempfile.mkdtemp(prefix="DiscordServerManager-")
-    print(auth)
-    folderData = discord_guild_info.getGuildFolders(userGuildFolderSettings, auth)
+    folderData = asyncio.run(discord_guild_info.getGuildFolders(userGuildFolderSettings, auth))
     serverList = [item['iconURL'] for item in folderData]
     fileList = []
     threadpool = multiprocessing.Pool(os.cpu_count())
@@ -100,10 +80,8 @@ def download_folder(auth,userGuildFolderSettings ):
         imageFile = x['iconURL'].split('/')[-2]
         serverName = x['name']
         index = x['index']
-        print(f"test: {imageFile}")
         fileList.append(
-            {"filename": f"{folder_path}\\{imageFile}", "serverName": serverName, 'index': index})
-    
+            {"filename": f"{folder_path}\\{imageFile}", "serverName": serverName, 'index': index, "serverInfo": x['serverInfo']})
     return fileList
 
 
@@ -115,9 +93,8 @@ def exit_event(path):
 def downloadIconImage(url, folder_path):
     resp = discord_guild_info.downloadImage(url)
     fileName = url.split('/')[-2]
-    print(resp.url, folder_path)
     if resp.status_code == 200:
-        print('sucess')
+        print(f'Download of image {resp.url} is success.')
         with open(os.path.join(folder_path, f"{fileName}.jpeg"), "wb") as f:
             shutil.copyfileobj(resp.raw, f)
 
